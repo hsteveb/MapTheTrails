@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">MapTheTrails</string>
+    <string name="title_activity_maps">Map</string>
+    <string name="delete">Delete</string>
+    <string name="show_points">Show</string>
+    <string name="hide_points">Hide</string>
+</resources>
