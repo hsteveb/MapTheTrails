@@ -12,6 +12,7 @@
         android:background="?attr/colorPrimary"
         android:elevation="4dp"
         android:theme="@style/ThemeOverlay.AppCompat.ActionBar"
+        android:visibility="gone"
         map:popupTheme="@style/ThemeOverlay.AppCompat.Light"/>
 
     <fragment
@@ -28,6 +29,7 @@
             android:layout_width="wrap_content"
             android:layout_height="50dp"
             android:layout_gravity="center|bottom"
+            android:visibility="gone"
             android:text="Start"/>
 
     </fragment>

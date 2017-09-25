@@ -4,6 +4,7 @@ package com.corp.barrios.mapthetrails.Controller;
    3. Work on sqlite to save all the coordinates.
  */
 
+import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -20,7 +21,6 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
-import android.widget.Toast;
 
 import com.corp.barrios.mapthetrails.Model.Trail;
 import com.corp.barrios.mapthetrails.Model.TrailInfo;
@@ -51,9 +51,12 @@ import java.util.List;
 import static com.corp.barrios.mapthetrails.R.id.map;
 
 public class MapsActivity extends AppCompatActivity implements OnMapReadyCallback,
-        ConnectionCallbacks, OnConnectionFailedListener, LocationListener {
+        ConnectionCallbacks, OnConnectionFailedListener, LocationListener, View.OnClickListener, GoogleMap.OnPolylineClickListener,
+        GoogleMap.OnMapClickListener, GoogleMap.OnCircleClickListener{
 
     private static final String TAG = "MapsActivity";
+
+    private static final int PERMISSION_LOCATION_REQUEST = 0;
 
     private Button mButton;
 
@@ -97,14 +100,15 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                     .build();
         }
 
+        mButton = (Button) findViewById(R.id.start_stop);
+        mButton.setOnClickListener(this);
+
         createLocationRequest();
         mRequestingLocationUpdates = false;
         mTrailLab = TrailLab.get(this);
         mInfoLab = new TrailInfoLab();
 
-        Toolbar toolbar = (Toolbar) findViewById(R.id.my_toolbar);
-        setSupportActionBar(toolbar);
-        getSupportActionBar().hide();
+        setSupportActionBar((Toolbar) findViewById(R.id.my_toolbar));
     }
 
 
@@ -120,127 +124,36 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
-
-
         if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            mMap.setMyLocationEnabled(true);
-            mMap.getUiSettings().setZoomControlsEnabled(true);
+            setupMap();
         } else {
-            Toast.makeText(this, "Permission failed", Toast.LENGTH_SHORT).show();
+            locationPermission();
         }
-
-        /*mMap.setOnMyLocationButtonClickListener(new GoogleMap.OnMyLocationButtonClickListener() {
-            @Override
-            public boolean onMyLocationButtonClick() {
-                Location mLocation = null;
-                if (ActivityCompat.checkSelfPermission(mContext, android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                    mLocation = LocationServices.FusedLocationApi.getLastLocation(mGoogleApiClient);
-                } else {
-                    Log.d(TAG, "Permission failed");
-                }
-                if (mLocation != null)
-                    Toast.makeText(getApplicationContext(), String.format("Longitude: %f Latitude: %f", mLocation.getLongitude(), mLocation.getLatitude()), Toast.LENGTH_SHORT).show();
-                return false;
-            }
-        });*/
-
-        mButton = (Button) findViewById(R.id.start_stop);
-
-        /* This is where we shall start the gps mapping and stop and save the trail.
-            Saving all info will be done with sqlite for now.
-            * Using LocationServices since it does everything for you.
-         */
-        mButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                if (mGoogleApiClient.isConnected()) {
-                    if(!mRequestingLocationUpdates)
-                    {
-                        mButton.setText("Stop");
-                        mRequestingLocationUpdates = true;
-                        startLocationUpdates();
-                    }
-                    else {
-                        mButton.setText("Start");
-                        mRequestingLocationUpdates = false;
-                        Trail trail = new Trail(mPolyline.getPoints());
-                        mTrailLab.addTrail(trail);
-                        Log.d(TAG, "saved trail heres the updated list: " + mTrailLab.getLists().size());
-
-                        mPolyline.setClickable(true);
-                        mInfoLab.addKVP(mPolyline, new TrailInfo(trail, mCircles));
-
-                        mPolylineOptions = null;
-                        mCircles = null;
-                        mPolyline = null;
-                        stopLocationUpdates();
-                    }
-                }
-            }
-        });
-
-        for(Trail trail: mTrailLab.getLists())
-        {
-            List<Circle> circles = new ArrayList<>();
-            PolylineOptions lines = new PolylineOptions().width(5).color(Color.RED);
-
-
-            for(LatLng latLng: trail.getList())
-            {
-                lines.add(latLng);
-                CircleOptions circleOptions = new CircleOptions().radius(radius).center(latLng).fillColor(Color.RED).strokeColor(Color.RED).visible(false);
-                Circle circle = mMap.addCircle(circleOptions);
-                circles.add(circle);
-            }
-
-            Polyline polyline = mMap.addPolyline(lines);
-            polyline.setClickable(true);
-            
-            mInfoLab.addKVP(polyline, new TrailInfo(trail, circles));
-        }
-
-        /*
-        - Check and see if clicked variables are not null and remove the visibility;
-         */
-        mMap.setOnPolylineClickListener(new GoogleMap.OnPolylineClickListener() {
-            @Override
-            public void onPolylineClick(Polyline polyline) {
-
-                LatLngBounds latLngBounds;
-                LatLng point1 = polyline.getPoints().get(0), point2 = polyline.getPoints().get(polyline.getPoints().size() -1);
-
-                if(clickedPolyline != null || clickedTrail != null)
-                    clearClickedPolylineInfo();
-
-
-                if(point1.latitude > point2.latitude)
-                    latLngBounds = new LatLngBounds(point2, point1);
-                else
-                    latLngBounds = new LatLngBounds(point1, point2);
-
-
-                clickedPolyline = polyline;
-                clickedTrail = mInfoLab.getTrailInfo(polyline);
-                mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(latLngBounds, 5));
-                getSupportActionBar().show();
-
-            }
-        });
-
-        mMap.setOnMapClickListener(new GoogleMap.OnMapClickListener() {
-            @Override
-            public void onMapClick(LatLng latLng) {
-                if(getSupportActionBar().isShowing())
-                {
-                    clearClickedPolylineInfo();
-                    getSupportActionBar().hide();
-                }
-            }
-        });
-
 
     }
 
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        switch(requestCode)
+        {
+            case PERMISSION_LOCATION_REQUEST:
+                if(grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+                    setupMap();
+                break;
+            default:
+                break;
+        }
+        //super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    }
+
+    private void locationPermission()
+    {
+        ActivityCompat.requestPermissions(this,
+                new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
+                PERMISSION_LOCATION_REQUEST);
+    }
+
+    /* Where the actionbar is setup and also when any of the menu items are clicked */
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.main_menu, menu);
@@ -277,6 +190,88 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
+    /* This is where you will find all the click methods that need to be implemented */
+    @Override
+    public void onClick(View v) {
+        switch(v.getId())
+        {
+            case R.id.start_stop:
+                /* This is where we shall start the gps mapping and stop and save the trail.
+                Saving all info will be done with sqlite for now.
+                - Using LocationServices since it does everything for you.
+                * */
+                if (mGoogleApiClient.isConnected()) {
+                    if(!mRequestingLocationUpdates)
+                    {
+                        mButton.setText("Stop");
+                        mRequestingLocationUpdates = true;
+                        startLocationUpdates();
+                    }
+                    else {
+                        mButton.setText("Start");
+                        mRequestingLocationUpdates = false;
+                        Trail trail = new Trail(mPolyline.getPoints());
+                        mTrailLab.addTrail(trail);
+                        Log.d(TAG, "saved trail heres the updated list: " + mTrailLab.getLists().size());
+
+                        mPolyline.setClickable(true);
+                        mInfoLab.addKVP(mPolyline, new TrailInfo(trail, mCircles));
+
+                        mPolylineOptions = null;
+                        mCircles = null;
+                        mPolyline = null;
+                        stopLocationUpdates();
+                    }
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    @Override
+    public void onPolylineClick(Polyline polyline) {
+        /* figure out way to stop calling the same polyline */
+            Log.d(TAG, "onPolylineClick");
+        if(clickedPolyline == null || clickedTrail == null || !clickedPolyline.equals(polyline))
+        {
+            LatLngBounds latLngBounds;
+            LatLng point1 = polyline.getPoints().get(0), point2 = polyline.getPoints().get(polyline.getPoints().size() -1);
+
+            //if(clickedPolyline != null || clickedTrail != null)
+                clearClickedPolylineInfo();
+
+
+            if(point1.latitude > point2.latitude)
+                latLngBounds = new LatLngBounds(point2, point1);
+            else
+                latLngBounds = new LatLngBounds(point1, point2);
+
+
+            clickedPolyline = polyline;
+            clickedTrail = mInfoLab.getTrailInfo(polyline);
+            mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(latLngBounds, 5));
+            getSupportActionBar().show();
+        }
+
+    }
+
+    @Override
+    public void onMapClick(LatLng latLng) {
+        Log.d(TAG, "onMapClicked");
+        if(getSupportActionBar().isShowing())
+        {
+            clearClickedPolylineInfo();
+            getSupportActionBar().hide();
+        }
+    }
+
+    @Override
+    public void onCircleClick(Circle circle) {
+        Log.d(TAG, "circle clicked");
+    }
+
+    /* All the stuff for the life cycle of the activity and saving stuff if the screen rotates, which it doesn't right now */
     @Override
     public void onSaveInstanceState(Bundle outState, PersistableBundle outPersistentState) {
         super.onSaveInstanceState(outState, outPersistentState);
@@ -406,4 +401,50 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             clickedTrail.setCircleVisibility(value);
     }
 
+    /* This method is used to get the trails from the database and display them on the map */
+    private void setuptrails()
+    {
+        for(Trail trail: mTrailLab.getLists())
+        {
+            List<Circle> circles = new ArrayList<>();
+            PolylineOptions lines = new PolylineOptions().width(5).color(Color.RED);
+
+
+            for(LatLng latLng: trail.getList())
+            {
+                lines.add(latLng);
+                CircleOptions circleOptions = new CircleOptions().radius(radius).center(latLng).fillColor(Color.RED).strokeColor(Color.RED).visible(false).clickable(true);
+                Circle circle = mMap.addCircle(circleOptions);
+                circles.add(circle);
+            }
+
+            Polyline polyline = mMap.addPolyline(lines);
+            polyline.setClickable(true);
+
+            mInfoLab.addKVP(polyline, new TrailInfo(trail, circles));
+        }
+    }
+
+    /* setup the Map whenever the permission has been granted.
+       Since setMyLocationEnabled needs a permission check this method needs to be called inside
+     */
+    private void setupMap()
+    {
+        if(mMap != null)
+        {
+            try
+            {
+                mMap.setMyLocationEnabled(true);
+            }
+            catch(SecurityException e)
+            {
+                Log.d(TAG, "Permission has not been Granted: " + e);
+            }
+            mMap.getUiSettings().setZoomControlsEnabled(true);
+            mButton.setVisibility(View.VISIBLE);
+            mMap.setOnPolylineClickListener(this);
+            mMap.setOnMapClickListener(this);
+            setuptrails();
+        }
+    }
 }
